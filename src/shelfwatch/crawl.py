@@ -30,6 +30,7 @@ class Crawl:
     total_claimed: int | None = None
     unparsed_prices: int = 0
     product_pages_fetched: int = 0
+    stopped_early: bool = False
 
     @property
     def problems(self) -> list[str]:
@@ -40,6 +41,8 @@ class Crawl:
             p.append(f"{len(self.pages_blocked)} pages served a bot-check instead of products")
         if self.pages_empty:
             p.append(f"{len(self.pages_empty)} pages had no products the parser recognised")
+        if self.stopped_early:
+            p.append("stopped at the page limit (trial run)")
         if self.unparsed_prices:
             p.append(f"{self.unparsed_prices} prices could not be read")
         return p
@@ -107,6 +110,7 @@ def crawl(
             url = page.next_url
         else:
             url = None
+    c.stopped_early = bool(url) and n > max_pages
     # the same product can appear twice if a page shifts while crawling; keep the first
     seen, rows = set(), []
     for r in c.rows:

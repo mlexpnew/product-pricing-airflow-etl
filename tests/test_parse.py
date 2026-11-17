@@ -32,3 +32,10 @@ def test_product_page():
     p = w.products[0]
     info = parse_product(SynthSite(w).get(p.url)[1])
     assert info == {"product_id": p.upc, "category": p.category}
+
+
+def test_trial_run_says_it_stopped_early():
+    from shelfwatch.crawl import crawl
+
+    c = crawl(SynthSite(World(3, n=100)), {}, max_pages=2)
+    assert len(c.rows) == 40 and c.stopped_early and "page limit" in " ".join(c.problems)
