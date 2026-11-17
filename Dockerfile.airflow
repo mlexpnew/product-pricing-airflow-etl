@@ -1,0 +1,4 @@
+FROM apache/airflow:2.9.3-python3.11
+COPY --chown=airflow:root pyproject.toml README.md /opt/shelfwatch/
+COPY --chown=airflow:root src /opt/shelfwatch/src
+RUN pip install --no-cache-dir "/opt/shelfwatch[postgres]"

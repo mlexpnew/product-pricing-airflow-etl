@@ -1,0 +1,72 @@
+name: CI
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -e ".[dev]"
+      - run: ruff check . && ruff format --check src tests app.py dags
+      - run: pytest -q
+      - name: Benchmark gate (wrong prices, changes caught, false alerts)
+        run: python -m shelfwatch.evaluate --gate
+      - run: cat eval_results/report.md >> "$GITHUB_STEP_SUMMARY"
+
+  postgres:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env: {POSTGRES_PASSWORD: ci, POSTGRES_DB: shelfwatch}
+        ports: ["5432:5432"]
+        options: --health-cmd pg_isready --health-interval 5s --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -e ".[postgres]"
+      - name: A simulated month on PostgreSQL, then a re-run of the same days
+        env: {SHELFWATCH_DB: "postgresql://postgres:ci@localhost:5432/shelfwatch"}
+        run: |
+          shelfwatch demo --days 10
+          shelfwatch demo --days 10
+          python -c "
+          from shelfwatch.store import Store; import os
+          s = Store(os.environ['SHELFWATCH_DB'])
+          r = s.query('SELECT status, COUNT(*) AS n FROM runs GROUP BY status')
+          a = s.query('SELECT COUNT(*) AS n FROM alerts')[0]['n']
+          print(r, a); assert sum(x['n'] for x in r) == 11 and a > 0"
+
+  docker:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: docker build -t shelfwatch .
+      - name: Smoke test
+        run: |
+          docker run --rm shelfwatch shelfwatch demo --days 3
+          docker run -d --name sw -p 8000:8000 shelfwatch
+          for i in $(seq 1 30); do curl -sf localhost:8000/health && break; sleep 1; done
+          curl -sf localhost:8000/health | grep -q ok
+      - run: docker build -f Dockerfile.airflow -t shelfwatch-airflow .
+
+  live:
+    # the real books.toscrape.com and real exchange rates; informational, the site is not ours
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -e .
+      - run: shelfwatch --db sqlite:///live.db run --max-pages 2 | tee live.json
+      - run: echo '```json' >> "$GITHUB_STEP_SUMMARY" && cat live.json >> "$GITHUB_STEP_SUMMARY" && echo '```' >> "$GITHUB_STEP_SUMMARY"
