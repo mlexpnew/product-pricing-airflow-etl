@@ -12,3 +12,10 @@ postgres_data/
 
 # OS
 .DS_Store
+
+# ShelfWatch
+*.db
+eval_results/
+.env
+__pycache__/
+*.egg-info/

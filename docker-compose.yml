@@ -1,51 +1,50 @@
-version: "3.8"
-
+# Postgres + Airflow (daily crawl) + API + desk screen.  Copy .env.example to .env first.
 services:
   postgres:
-    image: postgres:14
-    container_name: postgres
+    image: postgres:16
     environment:
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
-      POSTGRES_DB: postgres
-    ports:
-      - "5433:5432"
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
+      POSTGRES_USER: ${POSTGRES_USER:-shelfwatch}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+      POSTGRES_DB: shelfwatch
+    volumes: [pgdata:/var/lib/postgresql/data]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-shelfwatch}"]
+      interval: 5s
+      retries: 10
 
   airflow:
-    image: apache/airflow:2.7.3
-    container_name: airflow-webserver
-    depends_on:
-      - postgres
-
+    build: {context: ., dockerfile: Dockerfile.airflow}
+    depends_on: {postgres: {condition: service_healthy}}
     environment:
       AIRFLOW__CORE__EXECUTOR: LocalExecutor
-      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://postgres:postgres@postgres:5432/postgres
+      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://${POSTGRES_USER:-shelfwatch}:${POSTGRES_PASSWORD}@postgres/shelfwatch
       AIRFLOW__CORE__LOAD_EXAMPLES: "false"
-      AIRFLOW__WEBSERVER__SECRET_KEY: airflow_secret_key_123
-      AIRFLOW__CORE__FERNET_KEY: ""
-      AIRFLOW__WEBSERVER__RBAC: "true"
-
-    volumes:
-      - ./dags:/opt/airflow/dags
-      - ./scripts:/opt/airflow/scripts
-
-    ports:
-      - "8080:8080"
-
+      AIRFLOW__WEBSERVER__SECRET_KEY: ${AIRFLOW_SECRET_KEY:?set AIRFLOW_SECRET_KEY in .env}
+      SHELFWATCH_DB: postgresql://${POSTGRES_USER:-shelfwatch}:${POSTGRES_PASSWORD}@postgres/shelfwatch
+      _AIRFLOW_WWW_USER_PASSWORD: ${AIRFLOW_ADMIN_PASSWORD:?set AIRFLOW_ADMIN_PASSWORD in .env}
+    volumes: [./dags:/opt/airflow/dags]
+    ports: ["8080:8080"]
     command: >
-      bash -c "
-      airflow db upgrade &&
-      airflow users create
-        --username admin
-        --password admin
-        --firstname Admin
-        --lastname User
-        --role Admin
-        --email admin@example.com || true &&
-      airflow scheduler & airflow webserver
-      "
+      bash -c "airflow db migrate &&
+      airflow users create --username admin --password $${_AIRFLOW_WWW_USER_PASSWORD} --firstname Admin
+      --lastname User --role Admin --email admin@example.com || true &&
+      (airflow scheduler &) && airflow webserver"
+
+  api:
+    build: .
+    depends_on: {postgres: {condition: service_healthy}}
+    environment:
+      SHELFWATCH_DB: postgresql://${POSTGRES_USER:-shelfwatch}:${POSTGRES_PASSWORD}@postgres/shelfwatch
+      SHELFWATCH_API_KEYS: ${SHELFWATCH_API_KEYS:-}
+    ports: ["8000:8000"]
+
+  app:
+    build: .
+    depends_on: {postgres: {condition: service_healthy}}
+    environment:
+      SHELFWATCH_DB: postgresql://${POSTGRES_USER:-shelfwatch}:${POSTGRES_PASSWORD}@postgres/shelfwatch
+    command: ["streamlit", "run", "app.py", "--server.address", "0.0.0.0"]
+    ports: ["8501:8501"]
 
 volumes:
-  postgres_data:
+  pgdata:

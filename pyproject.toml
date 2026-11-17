@@ -1,0 +1,36 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "shelfwatch"
+version = "1.0.0"
+description = "Competitor price and stock monitoring that checks every crawl before trusting it"
+readme = "README.md"
+license = { text = "MIT" }
+requires-python = ">=3.11"
+dependencies = ["requests>=2.31", "beautifulsoup4>=4.12", "lxml>=5.0"]
+
+[project.optional-dependencies]
+api = ["fastapi>=0.110", "uvicorn>=0.29"]
+app = ["streamlit>=1.35", "pandas>=2.1"]
+postgres = ["psycopg2-binary>=2.9"]
+dev = ["pytest>=8", "ruff>=0.5", "httpx>=0.27", "fastapi>=0.110", "pandas>=2.1", "psycopg2-binary>=2.9"]
+
+[project.scripts]
+shelfwatch = "shelfwatch.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 112
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP"]
+ignore = ["B008"]
