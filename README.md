@@ -1,6 +1,6 @@
 # ShelfWatch
 
-![CI](https://github.com/mlexpnew/product-pricing-airflow-etl/actions/workflows/ci.yml/badge.svg?branch=main)
+![CI](https://github.com/mlexpnew/shelfwatch/actions/workflows/ci.yml/badge.svg?branch=main)
 
 **Competitor price and stock monitoring for Indian online sellers: crawl competitor catalogues every day, convert to rupees, check each crawl before trusting it, and send only real changes.**
 
